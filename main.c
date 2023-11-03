@@ -13,20 +13,86 @@
 #include "pico/multicore.h"
 #include "lufa/AudioClassCommon.h"
 
-// todo forget why this is using core 1 for sound: presumably not necessary
-// todo noop when muted
+#include "dsp/dsp.h"
 
-CU_REGISTER_DEBUG_PINS(audio_timing)
+// dsp audio buffers
+dspfx buf0[192];
+dspfx buf1[192];
 
-// ---- select at most one ---
-//CU_SELECT_DEBUG_PINS(audio_timing)
+// equalizer filters
+biquad(eq_bq_0)
+biquad(eq_bq_1)
+biquad(eq_bq_2)
+biquad(eq_bq_3)
+biquad(eq_bq_4)
+biquad(eq_bq_5)
+biquad(eq_bq_6)
+biquad(eq_bq_7)
+
+bufring_t bufring1 = {
+.len = 0,
+.index = 0,
+.index1 = 0,
+};
+
+#define EQ_ENABLE
+#define BASS_ENABLE
+
+#define EQ_BASS 1.0103039413192074,-1.9969618889340095,0.9867280269044961,-1.9969618889340095,0.9970319682237037
+
+#define EQ_I_0 0.9965576386879125,-1.9839585467318037,0.9879395722471472,-1.9839585467318037,0.9844972109350598
+#define EQ_I_1 0.9963746376001873,-1.9658037098953092,0.971220306025217,-1.9658037098953092,0.9675949436254043
+#define EQ_I_2 0.8268183972914943,-1.3305651464497943,0.642976882517346,-1.3305651464497943,0.4697952798088404
+#define EQ_I_3 0.9140112066297957,-0.7905987559304656,0.4423009998729839,-0.7905987559304656,0.3563122065027796
+#define EQ_I_4 0.7402985840212692,0.4319053043751767,0.4494992580405334,0.4319053043751767,0.1897978420618026
+#define EQ_I_5 0.9025172943482934,1.2860580329781677,0.6818806031296316,1.2860580329781677,0.5843978974779251
+#define EQ_I_6 0.8753858330544143,-1.4142987088868204,0.6249711130929093,-1.4142987088868204,0.5003569461473237 // 2600hz -6db 1q
+
+#ifndef EQ_I_0
+#define EQ_I_0 1.0,0.0,0.0,0.0,0.0
+#endif
+
+#ifndef EQ_I_1
+#define EQ_I_1 1.0,0.0,0.0,0.0,0.0
+#endif
+
+#ifndef EQ_I_2
+#define EQ_I_2 1.0,0.0,0.0,0.0,0.0
+#endif
+
+#ifndef EQ_I_3
+#define EQ_I_3 1.0,0.0,0.0,0.0,0.0
+#endif
+
+#ifndef EQ_I_4
+#define EQ_I_4 1.0,0.0,0.0,0.0,0.0
+#endif
+
+#ifndef EQ_I_5
+#define EQ_I_5 1.0,0.0,0.0,0.0,0.0
+#endif
+
+#ifndef EQ_I_6
+#define EQ_I_6 1.0,0.0,0.0,0.0,0.0
+#endif
+
+int32_t actual_vol = 0;
+#define VOL_STEP 600000
+
+dspfx limit[192]; // sample store
+int limit_index = 0;
+int32_t limit_vol = 0;
+#define LIMIT_MUL ((dspfx)(0.03*(double)(1<<30)))
+#define BASS_MUL floatfx(1./8.)
+int64_t targ = 0;
+#define BASS_STEP 600000
+#define BASS_STEP_DOWN 1200000
 
 // todo make descriptor strings should probably belong to the configs
 static char *descriptor_strings[] =
         {
-                "Raspberry Pi",
-                "Pico Examples Sound Card",
-                "0123456789AB"
+                "sctanf",
+                "Pico Amp"
         };
 
 // todo fix these
@@ -60,7 +126,7 @@ struct audio_device_config {
         USB_Audio_StdDescriptor_Interface_AS_t streaming;
         struct __packed {
             USB_Audio_StdDescriptor_Format_t core;
-            USB_Audio_SampleFreq_t freqs[2];
+            USB_Audio_SampleFreq_t freqs[1];
         } format;
     } as_audio;
     struct __packed {
@@ -79,7 +145,7 @@ static const struct audio_device_config audio_device_config = {
                 .bConfigurationValue = 0x01,
                 .iConfiguration      = 0x00,
                 .bmAttributes        = 0x80,
-                .bMaxPower           = 0x32,
+                .bMaxPower           = 0xfa,
         },
         .ac_interface = {
                 .bLength            = sizeof(audio_device_config.ac_interface),
@@ -175,10 +241,9 @@ static const struct audio_device_config audio_device_config = {
                                 .bNrChannels = 2,
                                 .bSubFrameSize = 2,
                                 .bBitResolution = 16,
-                                .bSampleFrequencyType = count_of(audio_device_config.as_audio.format.freqs),
+                                .bSampleFrequencyType = 1,
                         },
                         .freqs = {
-                                AUDIO_SAMPLE_FREQ(44100),
                                 AUDIO_SAMPLE_FREQ(48000)
                         },
                 },
@@ -222,7 +287,7 @@ static struct usb_endpoint ep_op_out, ep_op_sync;
 static const struct usb_device_descriptor boot_device_descriptor = {
         .bLength            = 18,
         .bDescriptorType    = 0x01,
-        .bcdUSB             = 0x0110,
+        .bcdUSB             = 0x0110, // 1.1
         .bDeviceClass       = 0x00,
         .bDeviceSubClass    = 0x00,
         .bDeviceProtocol    = 0x00,
@@ -247,54 +312,112 @@ const char *_get_descriptor_string(uint index) {
 static struct {
     uint32_t freq;
     int16_t volume;
-    int16_t vol_mul;
+    int32_t vol_mul;
     bool mute;
 } audio_state = {
-        .freq = 44100,
+        .freq = 48000,
 };
 
-static struct audio_buffer_pool *producer_pool;
+uint64_t times[1024];
+int timei = 0;
+static void __not_in_flash_func(_as_audio_packet)(struct usb_endpoint *ep) { // total 733 us + 87 us
+    uint64_t now_time = time_us_64();
 
-static void _as_audio_packet(struct usb_endpoint *ep) {
-    assert(ep->current_transfer);
     struct usb_buffer *usb_buffer = usb_current_out_packet_buffer(ep);
-    DEBUG_PINS_SET(audio_timing, 1);
-    // todo deal with blocking correctly
-    struct audio_buffer *audio_buffer = take_audio_buffer(producer_pool, true);
-    DEBUG_PINS_CLR(audio_timing, 1);
-    assert(!(usb_buffer->data_len & 3u));
-    audio_buffer->sample_count = usb_buffer->data_len / 4;
-    assert(audio_buffer->sample_count);
-    assert(audio_buffer->max_sample_count >= audio_buffer->sample_count);
-    uint16_t vol_mul = audio_state.vol_mul;
-    int16_t *out = (int16_t *) audio_buffer->buffer->bytes;
+    int32_t count = usb_buffer->data_len / 4;
+    int32_t vol_mul = audio_state.mute ? 0 : audio_state.vol_mul;
     int16_t *in = (int16_t *) usb_buffer->data;
-    for (int i = 0; i < audio_buffer->sample_count * 2; i++) {
-        out[i] = (int16_t) ((in[i] * vol_mul) >> 15u);
-    }
 
-    give_audio_buffer(producer_pool, audio_buffer);
-    // keep on truckin'
+    for (int i = 0; i < count * 2; i++) {
+        buf0[i] = intfx(in[i]);
+    }
+    
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
+    // 8 us elapsed
+#ifdef EQ_ENABLE // 521 us + 87 us
+    process_biquad(&eq_bq_1, biquadconstsfx(EQ_I_0), count, buf0, buf1); // 87 us each
+    process_biquad(&eq_bq_2, biquadconstsfx(EQ_I_1), count, buf1, buf0);
+    process_biquad(&eq_bq_3, biquadconstsfx(EQ_I_2), count, buf0, buf1);
+    process_biquad(&eq_bq_4, biquadconstsfx(EQ_I_3), count, buf1, buf0);
+    process_biquad(&eq_bq_5, biquadconstsfx(EQ_I_4), count, buf0, buf1);
+    process_biquad(&eq_bq_6, biquadconstsfx(EQ_I_5), count, buf1, buf0);
+    process_biquad(&eq_bq_7, biquadconstsfx(EQ_I_6), count, buf0, buf1);
+//    process_biquad(&eq_bq_8, biquadconstsfx(EQ_I_7), count, buf1, buf0);
+#endif
+    for (int i = 0; i < count * 2; i += 2) { // 25 us
+        if (actual_vol - VOL_STEP > vol_mul) actual_vol -= VOL_STEP;
+        else if (actual_vol < vol_mul - VOL_STEP) actual_vol += VOL_STEP;
+        else actual_vol = vol_mul;
+        buf0[i] = mulfx2(buf1[i], actual_vol);
+        buf0[i+1] = mulfx2(buf1[i+1], actual_vol);
+    }
+#ifdef BASS_ENABLE
+    for (int i = 0; i < count * 2; i++) { // 5 us
+        buf0[i] = buf0[i] >> 3; // divide by 8, headroom for bass eq
+    }
+    
+    process_biquad(&eq_bq_0, biquadconstsfx(EQ_BASS), count, buf0, buf1); // 87 us
+
+    limit[limit_index] = fxabs(buf1[0]);
+    if (limit[limit_index]>0) limit_index++;
+    limit_index %= 192;
+    limit[limit_index] = fxabs(buf1[1]);
+    if (limit[limit_index]>0) limit_index++;
+    limit_index %= 192;
+    dspfx max = LIMIT_MUL;
+    for (int i = 0; i < 192; i++) // 8 us
+    {
+        if (limit[i]>max) max = limit[i];
+    }
+    int64_t actualtarg = (int64_t)(LIMIT_MUL - mulfx(max, BASS_MUL)) * (int64_t)(1<<30) / (int64_t)(max - mulfx(max, BASS_MUL)); // target mix to limit bass
+    if (actualtarg < 0) actualtarg = 0; // if the mix goes negative, ignore it
+    
+    for (int i = 0; i < count * 2; i += 2) { // 61 us
+        if (targ - BASS_STEP_DOWN > actualtarg) targ -= BASS_STEP_DOWN;
+        else if (targ < actualtarg - BASS_STEP) targ += BASS_STEP;
+        else targ = actualtarg;
+        buf0[i] = (mulfx2(buf0[i], (1<<30) - targ) + mulfx2(buf1[i], targ)) << 3;
+        if (buf0[i] > (1<<30) - 1) buf0[i] = (1<<30) - 1;
+        if (buf0[i] < (-1<<30)) buf0[i] = (-1<<30);
+        buf0[i+1] = (mulfx2(buf0[i+1], (1<<30) - targ) + mulfx2(buf1[i+1], targ)) << 3;
+        if (buf0[i+1] > (1<<30) - 1) buf0[i+1] = (1<<30) - 1;
+        if (buf0[i+1] < (-1<<30)) buf0[i+1] = (-1<<30);
+    }
+#endif
+//    while (bufring1.len>1024-32-2-(count * 2)) {tight_loop_contents();}
+while(bufring1.corelock == 2) {tight_loop_contents();}
+bufring1.corelock = 1; // 20us
+    audioi2sconstuff2();
+    int curin = bufring1.index;
+    for (int i = 0; i < count * 2; i++) {
+        bufring1.buf[curin] = buf0[i]<<1;
+        if (curin < 32) {
+            bufring1.buf[curin+1024-32] = bufring1.buf[curin];
+        }
+        curin++;
+        curin %= 1024-32;
+    }
+    bufring1.len = bufring1.len + count * 2;
+    bufring1.index = (bufring1.index + count * 2) % (1024-32);
+bufring1.corelock = 0;
+    times[timei] = time_us_64() - now_time;
+    timei++;
+    timei %= 1024;
 }
 
 static void _as_sync_packet(struct usb_endpoint *ep) {
-    assert(ep->current_transfer);
-    DEBUG_PINS_SET(audio_timing, 2);
-    DEBUG_PINS_CLR(audio_timing, 2);
     struct usb_buffer *buffer = usb_current_in_packet_buffer(ep);
-    assert(buffer->data_max >= 3);
     buffer->data_len = 3;
 
-    // todo lie thru our teeth for now
-    uint feedback = (audio_state.freq << 14u) / 1000u;
+    int64_t feedback_buf = (double)((audio_state.freq) * (double)(1u << 14u));
+
+    uint feedback = feedback_buf / 1000u; // lie
 
     buffer->data[0] = feedback;
     buffer->data[1] = feedback >> 8u;
     buffer->data[2] = feedback >> 16u;
 
-    // keep on truckin'
     usb_grow_transfer(ep->current_transfer, 1);
     usb_packet_done(ep);
 }
@@ -337,21 +460,8 @@ static bool do_get_current(struct usb_setup_packet *setup) {
     return false;
 }
 
-// todo this seemed like aood guess, but is not correct
-uint16_t db_to_vol[91] = {
-        0x0001, 0x0001, 0x0001, 0x0001, 0x0001, 0x0001, 0x0002, 0x0002,
-        0x0002, 0x0002, 0x0003, 0x0003, 0x0004, 0x0004, 0x0005, 0x0005,
-        0x0006, 0x0007, 0x0008, 0x0009, 0x000a, 0x000b, 0x000d, 0x000e,
-        0x0010, 0x0012, 0x0014, 0x0017, 0x001a, 0x001d, 0x0020, 0x0024,
-        0x0029, 0x002e, 0x0033, 0x003a, 0x0041, 0x0049, 0x0052, 0x005c,
-        0x0067, 0x0074, 0x0082, 0x0092, 0x00a4, 0x00b8, 0x00ce, 0x00e7,
-        0x0104, 0x0124, 0x0147, 0x016f, 0x019c, 0x01ce, 0x0207, 0x0246,
-        0x028d, 0x02dd, 0x0337, 0x039b, 0x040c, 0x048a, 0x0518, 0x05b7,
-        0x066a, 0x0732, 0x0813, 0x090f, 0x0a2a, 0x0b68, 0x0ccc, 0x0e5c,
-        0x101d, 0x1214, 0x1449, 0x16c3, 0x198a, 0x1ca7, 0x2026, 0x2413,
-        0x287a, 0x2d6a, 0x32f5, 0x392c, 0x4026, 0x47fa, 0x50c3, 0x5a9d,
-        0x65ac, 0x7214, 0x7fff
-};
+// better
+int32_t db_to_vol_hp[100] = {0x40000000,0x390a415f,0x32d64617,0x2d4efbd5,0x28619ae9,0x23fd6678,0x2013739e,0x1c9676c6,0x197a967f,0x16b54337,0x143d1362,0x1209a37a,0x10137987,0xe53ebb3,0xcc509ab,0xb618871,0xa24b062,0x90a4d2f,0x80e9f96,0x72e50a6,0x6666666,0x5b439bc,0x5156d68,0x487e5fb,0x409c2b0,0x399570c,0x3352529,0x2dbd8ad,0x28c423f,0x2455385,0x2061b89,0x1cdc38c,0x19b8c27,0x16ecac5,0x146e75d,0x1235a71,0x103ab3d,0xe76e1e,0xce4328,0xb7d4dd,0xa3d70a,0x9205c6,0x82248a,0x73fd65,0x676044,0x5c224e,0x521d50,0x492f44,0x4139d3,0x3a21f3,0x33cf8d,0x2e2d27,0x29279d,0x24ade0,0x20b0bc,0x1d22a4,0x19f786,0x17249c,0x14a050,0x126216,0x10624d,0xe9a2d,0xd03a7,0xb9956,0xa566d,0x936a1,0x83621,0x75186,0x685c8,0x5d031,0x52e5a,0x49e1d,0x41d8f,0x3aafc,0x344df,0x2e9dd,0x298c0,0x25076,0x21008,0x1d69b,0x1a36e,0x175d1,0x14d2a,0x128ef,0x108a4,0xebdc,0xd236,0xbb5a,0xa6fa,0x94d1,0x84a2,0x7636,0x695b,0x5de6,0x53af,0x4a96,0x4279,0x3b3f,0x34cd,0x2f0f};
 
 // actually windows doesn't seem to like this in the middle, so set top range to 0db
 #define CENTER_VOLUME_INDEX 91
@@ -359,9 +469,9 @@ uint16_t db_to_vol[91] = {
 #define ENCODE_DB(x) ((uint16_t)(int16_t)((x)*256))
 
 #define MIN_VOLUME           ENCODE_DB(-CENTER_VOLUME_INDEX)
-#define DEFAULT_VOLUME       ENCODE_DB(0)
-#define MAX_VOLUME           ENCODE_DB(count_of(db_to_vol)-CENTER_VOLUME_INDEX)
-#define VOLUME_RESOLUTION    ENCODE_DB(1)
+#define DEFAULT_VOLUME       -27<<8 // -27dB
+#define MAX_VOLUME           0
+#define VOLUME_RESOLUTION    1
 
 static bool do_get_minimum(struct usb_setup_packet *setup) {
     usb_debug("AUDIO_REQ_GET_MIN\n");
@@ -412,25 +522,22 @@ static struct audio_control_cmd {
 } audio_control_cmd_t;
 
 static void _audio_reconfigure() {
-    switch (audio_state.freq) {
-        case 44100:
-        case 48000:
-            break;
-        default:
-            audio_state.freq = 44100;
-    }
-    // todo hack overwriting const
-    ((struct audio_format *) producer_pool->format)->sample_freq = audio_state.freq;
+    audio_state.freq = 48000; // only support 48kHz anyway
 }
 
 static void audio_set_volume(int16_t volume) {
     audio_state.volume = volume;
-    // todo interpolate
-    volume += CENTER_VOLUME_INDEX * 256;
-    if (volume < 0) volume = 0;
-    if (volume >= count_of(db_to_vol) * 256) volume = count_of(db_to_vol) * 256 - 1;
-    audio_state.vol_mul = db_to_vol[((uint16_t)volume) >> 8u];
-//    printf("VOL MUL %04x\n", audio_state.vol_mul);
+    int16_t pos = fxabs(volume)/256;
+    int16_t mix = fxabs(volume)%256; // mix between two steps
+    if (pos > 92) {
+        audio_state.vol_mul = 0;
+    }
+    else if (pos >= 91) {
+        audio_state.vol_mul = (db_to_vol_hp[91] * (256 - mix)) >> 8;
+    }
+    else {
+        audio_state.vol_mul = (((int64_t)db_to_vol_hp[pos] * (256 - mix)) + ((int64_t)db_to_vol_hp[pos+1] * mix)) >> 8;
+    }
 }
 
 static void audio_cmd_packet(struct usb_endpoint *ep) {
@@ -466,7 +573,6 @@ static void audio_cmd_packet(struct usb_endpoint *ep) {
     usb_start_empty_control_in_transfer_null_completion();
     // todo is there error handling?
 }
-
 
 static const struct usb_transfer_type _audio_cmd_transfer_type = {
         .on_packet = audio_cmd_packet,
@@ -580,40 +686,22 @@ void usb_sound_card_init() {
     usb_device_start();
 }
 
-static void core1_worker() {
+static void __not_in_flash_func(core1_worker)() {
     audio_i2s_set_enabled(true);
 }
 
 int main(void) {
-    set_sys_clock_48mhz();
+    set_sys_clock_khz(270000, true); // so i can fit more filters
 
-    stdout_uart_init();
+audioi2sconstuff(&bufring1);
 
-    //gpio_debug_pins_init();
-    puts("USB SOUND CARD");
-
-#ifndef NDEBUG
-    for(uint i=0;i<count_of(audio_device_config.as_audio.format.freqs);i++) {
-        uint freq = audio_device_config.as_audio.format.freqs[i].Byte1 |
-                (audio_device_config.as_audio.format.freqs[i].Byte2 << 8u) |
-                (audio_device_config.as_audio.format.freqs[i].Byte3 << 16u);
-        assert(freq <= AUDIO_FREQ_MAX);
-    }
-#endif
-    // initialize for 48k we allow changing later
+    // initialize for 48k
     struct audio_format audio_format_48k = {
             .format = AUDIO_BUFFER_FORMAT_PCM_S16,
             .sample_freq = 48000,
             .channel_count = 2,
     };
 
-    struct audio_buffer_format producer_format = {
-            .format = &audio_format_48k,
-            .sample_stride = 4
-    };
-
-    producer_pool = audio_new_producer_pool(&producer_format, 8, 48); // todo correct size
-    bool __unused ok;
     struct audio_i2s_config config = {
             .data_pin = PICO_AUDIO_I2S_DATA_PIN,
             .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
@@ -621,18 +709,11 @@ int main(void) {
             .pio_sm = 0,
     };
 
-    const struct audio_format *output_format;
-    output_format = audio_i2s_setup(&audio_format_48k, &config);
-    if (!output_format) {
-        panic("PicoAudio: Unable to open audio device.\n");
-    }
+    audio_i2s_setup(&audio_format_48k, &config);
 
-    ok = audio_i2s_connect_extra(producer_pool, false, 2, 96, NULL);
-    assert(ok);
     usb_sound_card_init();
 
     multicore_launch_core1(core1_worker);
-    printf("HAHA %04x %04x %04x %04x\n", MIN_VOLUME, DEFAULT_VOLUME, MAX_VOLUME, VOLUME_RESOLUTION);
     // MSD is irq driven
     while (1) __wfi();
 }

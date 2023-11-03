@@ -76,7 +76,7 @@ extern "C" {
 #ifdef PICO_AUDIO_I2S_SILENCE_BUFFER_SAMPLE_LENGTH
 #define PICO_AUDIO_I2S_SILENCE_BUFFER_SAMPLE_LENGTH PICO_AUDIO_SILENCE_BUFFER_SAMPLE_LENGTH
 #else
-#define PICO_AUDIO_I2S_SILENCE_BUFFER_SAMPLE_LENGTH 256u
+#define PICO_AUDIO_I2S_SILENCE_BUFFER_SAMPLE_LENGTH 1u
 #endif
 #endif
 
@@ -106,6 +106,16 @@ extern "C" {
 #define PICO_AUDIO_I2S_CLOCK_PIN_BASE 26
 #endif
 
+typedef struct bufring {
+int32_t buf[1024];
+int len;
+int index;
+int index1;
+int corelock;
+} bufring_t;
+void audioi2sconstuff(bufring_t *bufring1);
+void audioi2sconstuff2();
+
 // todo this needs to come from a build config
 /** \brief Base configuration structure used when setting up
  * \ingroup pico_audio_i2s
@@ -125,46 +135,6 @@ typedef struct audio_i2s_config {
  */
 const audio_format_t *audio_i2s_setup(const audio_format_t *intended_audio_format,
                                                const audio_i2s_config_t *config);
-
-
-/** \brief \todo
- * \ingroup pico_audio_i2s
- *
- * \param producer
- * \param connection
- */
-bool audio_i2s_connect_thru(audio_buffer_pool_t *producer, audio_connection_t *connection);
-
-
-/** \brief \todo
- * \ingroup pico_audio_i2s
- *
- * \param producer
- *
- *  todo make a common version (or a macro) .. we don't want to pull in unnecessary code by default
- */
-bool audio_i2s_connect(audio_buffer_pool_t *producer);
-
-
-/** \brief \todo
- * \ingroup pico_audio_i2s
- *
- * \param producer
- */
-bool audio_i2s_connect_s8(audio_buffer_pool_t *producer);
-
-/** \brief \todo
- * \ingroup pico_audio_i2s
- *
- * \param producer
- * \param buffer_on_give
- * \param buffer_count
- * \param samples_per_buffer
- * \param connection
- * \return
- */
-bool audio_i2s_connect_extra(audio_buffer_pool_t *producer, bool buffer_on_give, uint buffer_count,
-                                 uint samples_per_buffer, audio_connection_t *connection);
 
 
 /** \brief Set up system to output I2S audio
