@@ -26,16 +26,21 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "pico/stdlib.h"
+#include "hardware/clocks.h"
+
 #include "bsp/board_api.h"
 #include "tusb.h"
 #include "usb_descriptors.h"
+
+#include "i2s.h"
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF PROTOTYPES
 //--------------------------------------------------------------------+
 
 // List of supported sample rates
-const uint32_t sample_rates[] = {44100, 48000};
+const uint32_t sample_rates[] = {44100, 48000, 88200, 96000};
 
 uint32_t current_sample_rate  = 44100;
 
@@ -78,26 +83,29 @@ static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 int8_t mute[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1];       // +1 for master channel 0
 int16_t volume[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1];    // +1 for master channel 0
 
-// Buffer for microphone data
-int32_t mic_buf[CFG_TUD_AUDIO_FUNC_1_EP_IN_SW_BUF_SZ / 4];
 // Buffer for speaker data
-int32_t spk_buf[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ / 4];
+uint8_t spk_buf[CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ];
 // Speaker data size received in the last frame
 int spk_data_size;
 // Resolution per format
 const uint8_t resolutions_per_format[CFG_TUD_AUDIO_FUNC_1_N_FORMATS] = {CFG_TUD_AUDIO_FUNC_1_FORMAT_1_RESOLUTION_RX,
-                                                                        CFG_TUD_AUDIO_FUNC_1_FORMAT_2_RESOLUTION_RX};
+                                                                        CFG_TUD_AUDIO_FUNC_1_FORMAT_2_RESOLUTION_RX,
+                                                                        CFG_TUD_AUDIO_FUNC_1_FORMAT_3_RESOLUTION_RX};
 // Current resolution, update on format change
 uint8_t current_resolution;
 
 void led_blinking_task(void);
 void audio_task(void);
-void audio_control_task(void);
 
 /*------------- MAIN -------------*/
 int main(void)
 {
   board_init();
+
+  //i2s init
+  i2s_mclk_init(current_sample_rate);
+  i2s_mclk_dma_init();
+  i2s_handler();
 
   // init device stack on configured roothub port
   tud_init(BOARD_TUD_RHPORT);
@@ -112,7 +120,6 @@ int main(void)
   {
     tud_task(); // TinyUSB device task
     audio_task();
-    audio_control_task();
     led_blinking_task();
   }
 }
@@ -205,6 +212,9 @@ static bool tud_audio_clock_set_request(uint8_t rhport, audio_control_request_t 
     TU_VERIFY(request->wLength == sizeof(audio_control_cur_4_t));
 
     current_sample_rate = (uint32_t) ((audio_control_cur_4_t const *)buf)->bCur;
+    
+    //サンプリングレート変更
+    i2s_mclk_change_clock(current_sample_rate);
 
     TU_LOG1("Clock set current freq: %" PRIu32 "\r\n", current_sample_rate);
 
@@ -235,7 +245,7 @@ static bool tud_audio_feature_unit_get_request(uint8_t rhport, audio_control_req
     {
       audio_control_range_2_n_t(1) range_vol = {
         .wNumSubRanges = tu_htole16(1),
-        .subrange[0] = { .bMin = tu_htole16(-VOLUME_CTRL_50_DB), tu_htole16(VOLUME_CTRL_0_DB), tu_htole16(256) }
+        .subrange[0] = { .bMin = tu_htole16(-VOLUME_CTRL_100_DB), tu_htole16(VOLUME_CTRL_0_DB), tu_htole16(256) }
       };
       TU_LOG1("Get channel %u volume range (%d, %d, %u) dB\r\n", request->bChannelNumber,
               range_vol.subrange[0].bMin / 256, range_vol.subrange[0].bMax / 256, range_vol.subrange[0].bRes / 256);
@@ -277,6 +287,17 @@ static bool tud_audio_feature_unit_set_request(uint8_t rhport, audio_control_req
     TU_VERIFY(request->wLength == sizeof(audio_control_cur_2_t));
 
     volume[request->bChannelNumber] = ((audio_control_cur_2_t const *)buf)->bCur;
+
+    //音量変更
+    //Windowsはチャンネル0は使っていないっぽい
+    if (request->bChannelNumber == 1)
+    {
+      volume_change(volume[1], 1);
+    }
+    else if (request->bChannelNumber == 2)
+    {
+      volume_change(volume[2], 2);
+    }
 
     TU_LOG1("Set channel %d volume: %d dB\r\n", request->bChannelNumber, volume[request->bChannelNumber] / 256);
 
@@ -381,88 +402,43 @@ bool tud_audio_tx_done_pre_load_cb(uint8_t rhport, uint8_t itf, uint8_t ep_in, u
   return true;
 }
 
+void tud_audio_fb_done_cb(uint8_t rhport)
+{
+  return;
+}
+
 //--------------------------------------------------------------------+
 // AUDIO Task
 //--------------------------------------------------------------------+
 
 void audio_task(void)
 {
-  // When new data arrived, copy data from speaker buffer, to microphone buffer
-  // and send it over
-  // Only support speaker & headphone both have the same resolution
-  // If one is 16bit another is 24bit be care of LOUD noise !
   if (spk_data_size)
   {
-    if (current_resolution == 16)
+    enqueue(spk_buf, spk_data_size, current_resolution);
+
+    //1ms間隔でフィードバック
+    static uint32_t start_ms = 0;
+    uint32_t curr_ms = board_millis();
+    if (curr_ms > start_ms)
     {
-      int16_t *src = (int16_t*)spk_buf;
-      int16_t *limit = (int16_t*)spk_buf + spk_data_size / 2;
-      int16_t *dst = (int16_t*)mic_buf;
-      while (src < limit)
-      {
-        // Combine two channels into one
-        int32_t left = *src++;
-        int32_t right = *src++;
-        *dst++ = (int16_t) ((left >> 1) + (right >> 1));
-      }
-      tud_audio_write((uint8_t *)mic_buf, (uint16_t) (spk_data_size / 2));
-      spk_data_size = 0;
+      int8_t length =  get_buf_length();
+      uint32_t feedback = (current_sample_rate / 1000) << 16;
+
+      //Windowsの許容するフィードバック量
+      uint32_t min_feedback = (current_sample_rate / 1000 - 1) << 16;
+      uint32_t max_feedback = (current_sample_rate / 1000 + 1) << 16;
+
+      //i2sバッファの堆積量がBUF_DEPTH/2より多いか少ないかでフィードバック値を決定する
+      if (length < BUF_DEPTH / 2) feedback = max_feedback;
+      else if (length > BUF_DEPTH / 2) feedback = min_feedback;
+
+      tud_audio_fb_set(feedback);
+      start_ms = curr_ms;
     }
-    else if (current_resolution == 24)
-    {
-      int32_t *src = spk_buf;
-      int32_t *limit = spk_buf + spk_data_size / 4;
-      int32_t *dst = mic_buf;
-      while (src < limit)
-      {
-        // Combine two channels into one
-        int32_t left = *src++;
-        int32_t right = *src++;
-        *dst++ = (int32_t) ((uint32_t) ((left >> 1) + (right >> 1)) & 0xffffff00ul);
-      }
-      tud_audio_write((uint8_t *)mic_buf, (uint16_t) (spk_data_size / 2));
-      spk_data_size = 0;
-    }
+
+    spk_data_size = 0;
   }
-}
-
-void audio_control_task(void)
-{
-  // Press on-board button to control volume
-  // Open host volume control, volume should switch between 10% and 100%
-
-  // Poll every 50ms
-  const uint32_t interval_ms = 50;
-  static uint32_t start_ms = 0;
-  static uint32_t btn_prev = 0;
-
-  if ( board_millis() - start_ms < interval_ms) return; // not enough time
-  start_ms += interval_ms;
-
-  uint32_t btn = board_button_read();
-
-  if (!btn_prev && btn)
-  {
-    // Adjust volume between 0dB (100%) and -30dB (10%)
-    for (int i = 0; i < CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1; i++)
-    {
-      volume[i] = volume[i] == 0 ? -VOLUME_CTRL_30_DB : 0;
-    }
-
-    // 6.1 Interrupt Data Message
-    const audio_interrupt_data_t data = {
-      .bInfo = 0,                                       // Class-specific interrupt, originated from an interface
-      .bAttribute = AUDIO_CS_REQ_CUR,                   // Caused by current settings
-      .wValue_cn_or_mcn = 0,                            // CH0: master volume
-      .wValue_cs = AUDIO_FU_CTRL_VOLUME,                // Volume change
-      .wIndex_ep_or_int = 0,                            // From the interface itself
-      .wIndex_entity_id = UAC2_ENTITY_SPK_FEATURE_UNIT, // From feature unit
-    };
-
-    tud_audio_int_write(&data);
-  }
-
-  btn_prev = btn;
 }
 
 //--------------------------------------------------------------------+
