@@ -17,7 +17,7 @@ if (TARGET usb_device)
     PROJECT(usb_sound_card)
 
     add_executable(usb_sound_card
-            usb_sound_card.c
+            main.c
             )
 
     target_compile_definitions(usb_sound_card PRIVATE
