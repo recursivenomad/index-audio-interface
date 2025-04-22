@@ -13,6 +13,10 @@ set(CMAKE_CXX_STANDARD 17)
 # Initialize the Pico SDK
 pico_sdk_init()
 
+if (PICO_SDK_VERSION_STRING VERSION_LESS "2.0.0")
+    message(FATAL_ERROR "Require at least Raspberry Pi Pico SDK version 2.0.0")
+endif()
+
 add_subdirectory(i2s) # ???
 
 add_executable(pico_amp
