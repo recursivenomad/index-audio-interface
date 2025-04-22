@@ -13,6 +13,10 @@ set(CMAKE_CXX_STANDARD 17)
 # Initialize the Pico SDK
 pico_sdk_init()
 
+if (PICO_SDK_VERSION_STRING VERSION_LESS "2.0.0")
+    message(FATAL_ERROR "Require at least Raspberry Pi Pico SDK version 2.0.0")
+endif()
+
 if (TARGET usb_device)
     PROJECT(usb_sound_card)
 
