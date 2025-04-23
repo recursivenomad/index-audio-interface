@@ -1,46 +1,56 @@
-cmake_minimum_required(VERSION 3.12)
+#  SPDX-License-Identifier: MIT-0 OR CC0-1.0  #
+#     Authored 2025 by Peter S. Hollander     #
 
-# Pull in PICO SDK (must be before project)
-include(pico_sdk_import.cmake)
 
-# We also need PICO EXTRAS
-include(pico_extras_import.cmake)
-
-project(pico_playground C CXX)
+# The (minimum) versions below are what the Pico SDK uses
+cmake_minimum_required(VERSION 3.13...4.0.1)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
-# Initialize the Pico SDK
+
+
+# Include the Pico SDK & Extras (build functions, compiling definitions, etc)
+include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+include($ENV{PICO_EXTRAS_PATH}/external/pico_extras_import.cmake)
+
+
+PROJECT(usb_sound_card C CXX ASM)
+
+
+# Invokes the Pico SDK's CMakeLists.txt
 pico_sdk_init()
 
 if (PICO_SDK_VERSION_STRING VERSION_LESS "2.0.0")
-    message(FATAL_ERROR "Require at least Raspberry Pi Pico SDK version 2.0.0")
+    message(FATAL_ERROR "Raspberry Pi Pico SDK version 2.0.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}.")
 endif()
 
-if (TARGET usb_device)
-    PROJECT(usb_sound_card)
-
-    add_executable(usb_sound_card
-            main.c
-            )
-
-    target_compile_definitions(usb_sound_card PRIVATE
-            AUDIO_FREQ_MAX=48000
-
-            # ours are zero based, so say so
-            PICO_USBDEV_USE_ZERO_BASED_INTERFACES=1
-
-            # need large descriptor
-            PICO_USBDEV_MAX_DESCRIPTOR_SIZE=256
 
 
-            PICO_USBDEV_ISOCHRONOUS_BUFFER_STRIDE_TYPE=1
-            PICO_USBDEV_ENABLE_DEBUG_TRAgCE
+add_executable(${PROJECT_NAME}
+    main.c
+)
 
-            PICO_AUDIO_I2S_MONO_OUTPUT=0
-            PICO_AUDIO_I2S_MONO_INPUT=0
-    )
+target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
+)
 
-    target_link_libraries(usb_sound_card pico_stdlib usb_device pico_audio_i2s pico_multicore)
-    pico_add_extra_outputs(usb_sound_card)
-endif()
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    AUDIO_FREQ_MAX=48000
+    PICO_USBDEV_MAX_DESCRIPTOR_SIZE=256
+    PICO_USBDEV_USE_ZERO_BASED_INTERFACES=1
+    PICO_USBDEV_ISOCHRONOUS_BUFFER_STRIDE_TYPE=1
+    PICO_USBDEV_ENABLE_DEBUG_TRAgCE
+    PICO_AUDIO_I2S_MONO_OUTPUT=0
+    PICO_AUDIO_I2S_MONO_INPUT=0
+)
+
+target_link_libraries(${PROJECT_NAME}
+    pico_stdlib
+    usb_device
+    pico_audio_i2s
+    pico_multicore
+)
+
+
+
+# Creates map/bin/hex/uf2 files, in addition to elf
+pico_add_extra_outputs(${PROJECT_NAME})
