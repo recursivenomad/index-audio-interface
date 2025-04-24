@@ -50,7 +50,8 @@
 #define __USBDESCRIPTORS_H__
 
 /* Includes: */
-
+#include <stdint.h>
+#include <sys/cdefs.h>
 #define ATTR_PACKED __packed
 #define CPU_TO_LE16(x) (x)
 
