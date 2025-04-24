@@ -1,0 +1,16 @@
+# Project
+# -------
+
+# Misc intermediary/meta files
+_untracked/
+
+# Release files
+releases/
+
+
+
+# Firmware
+# --------
+
+# Build files
+build/
