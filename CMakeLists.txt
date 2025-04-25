@@ -30,12 +30,16 @@ include($ENV{PICO_EXTRAS_PATH}/external/pico_extras_import.cmake)
 PROJECT(usb_sound_card C CXX ASM)
 
 
+set(SKIP_PICO_AUDIO_I2S TRUE)  # Skips pico_audio_i2s within pico-extras
+
 # Invokes the Pico SDK's CMakeLists.txt
 pico_sdk_init()
 
 if (PICO_SDK_VERSION_STRING VERSION_LESS "2.0.0")
     message(FATAL_ERROR "Raspberry Pi Pico SDK version 2.0.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}.")
 endif()
+
+add_subdirectory(lib/i2s)  # Use local i2s instead
 
 
 
