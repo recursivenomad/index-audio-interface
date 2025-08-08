@@ -31,6 +31,8 @@
 
 *Coming soon...*
 
+[`./BUILDING.md`](./BUILDING.md)
+
 &nbsp;
 
 
