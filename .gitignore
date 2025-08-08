@@ -1,2 +1,17 @@
-build
-.vscode
+# Project
+# -------
+
+# Misc intermediary/meta files
+_untracked/
+.vscode/
+
+# Release files
+releases/
+
+
+
+# Firmware
+# --------
+
+# Build files
+build/
