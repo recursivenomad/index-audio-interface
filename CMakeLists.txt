@@ -28,12 +28,12 @@ add_subdirectory(lib/pico-i2s-pio)
 
 
 add_executable(${PROJECT_NAME}
-    main.c
-    usb_descriptors.c
+    src/main.c
+    lib/tinyusb/usb_descriptors.c
 )
 
 target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
-    ./
+    lib/tinyusb
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
