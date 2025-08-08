@@ -1,72 +1,54 @@
-# Generated Cmake Pico project file
+#  SPDX-License-Identifier: MIT-0 OR CC0-1.0  #
+#     Authored 2025 by Peter S. Hollander     #
 
-cmake_minimum_required(VERSION 3.13)
 
+# The (minimum) versions below are what the Pico SDK uses
+cmake_minimum_required(VERSION 3.13...4.0.1)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Initialise pico_sdk from installed location
-# (note this can come from environment, CMake cache etc)
 
-# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
-if(WIN32)
-    set(USERHOME $ENV{USERPROFILE})
-else()
-    set(USERHOME $ENV{HOME})
-endif()
-set(sdkVersion 2.1.1)
-set(toolchainVersion 14_2_Rel1)
-set(picotoolVersion 2.1.1)
-set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
-if (EXISTS ${picoVscode})
-    include(${picoVscode})
-endif()
-# ====================================================================================
-set(PICO_BOARD pico CACHE STRING "Board type")
 
-# Pull in Raspberry Pi Pico SDK (must be before project)
-include(pico_sdk_import.cmake)
+# Include the Pico SDK (build functions, compiling definitions, etc)
+include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
-project(pico_usb_i2s_speaker C CXX ASM)
 
-# Initialise the Raspberry Pi Pico SDK
+PROJECT(pico_usb_i2s_speaker C CXX ASM)
+
+
+# Invokes the Pico SDK's CMakeLists.txt
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
+if (PICO_SDK_VERSION_STRING VERSION_LESS "2.0.0")
+    message(FATAL_ERROR "Raspberry Pi Pico SDK version 2.0.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}.")
+endif()
 
-add_executable(pico_usb_i2s_speaker
-        main.c
-        usb_descriptors.c
-        )
+add_subdirectory(lib/pico-i2s-pio)
 
-pico_set_program_name(pico_usb_i2s_speaker "pico_usb_i2s_speaker")
-pico_set_program_version(pico_usb_i2s_speaker "0.1")
 
-# Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(pico_usb_i2s_speaker 1)
-pico_enable_stdio_usb(pico_usb_i2s_speaker 0)
 
-# Add the standard library to the build
-target_link_libraries(pico_usb_i2s_speaker
-        pico_stdlib)
-
-# Add the standard include files to the build
-target_include_directories(pico_usb_i2s_speaker PRIVATE
-  ${CMAKE_CURRENT_LIST_DIR}
-  ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts or any other standard includes, if required
+add_executable(${PROJECT_NAME}
+    main.c
+    usb_descriptors.c
 )
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/lib/pico-i2s-pio)
+target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
+    ./
+)
 
-# Add any user requested libraries
-target_link_libraries(pico_usb_i2s_speaker
-        hardware_clocks
-        hardware_dma
-        tinyusb_device
-        tinyusb_board
-        pico-i2s-pio
-        )
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+)
 
-pico_add_extra_outputs(pico_usb_i2s_speaker)
+target_link_libraries(${PROJECT_NAME}
+    tinyusb_device
+    tinyusb_board
+    pico-i2s-pio
+)
 
+
+
+pico_set_program_name(${PROJECT_NAME}        "pico_usb_i2s_speaker")
+pico_set_program_version(${PROJECT_NAME}     "0.1")
+
+# Creates map/bin/hex/uf2 files, in addition to elf
+pico_add_extra_outputs(${PROJECT_NAME})
