@@ -43,8 +43,8 @@
 ***License / Access***
 ======================
 
-Adapted firmware is redistributed under the [*3-Clause BSD License*][URL-BSD-3-Clause] and a [*Historical Permission Notice and Disclaimer*][URL-HPND].  
-Original work is made freely available under your choice of the [*MIT-0*][URL-MIT-0] license or [*CC0-1.0*][URL-CC0] public domain dedication.
+Adapted firmware is redistributed under the [*BSD-3-Clause*][URL-BSD-3-Clause] license and an [*HPND*][URL-HPND] variant.  
+Newly added work is freely available under your choice of the [*MIT-0*][URL-MIT-0] license or [*CC0-1.0*][URL-CC0] public domain dedication.
 
 ----------------------
 

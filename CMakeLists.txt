@@ -27,10 +27,8 @@ include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 include($ENV{PICO_EXTRAS_PATH}/external/pico_extras_import.cmake)
 
 
-PROJECT(usb_sound_card C CXX ASM)
+PROJECT(index-audio-interface C CXX ASM)
 
-
-set(SKIP_PICO_AUDIO_I2S TRUE)  # Skips pico_audio_i2s within pico-extras
 
 # Invokes the Pico SDK's CMakeLists.txt
 pico_sdk_init()
@@ -39,33 +37,6 @@ if (PICO_SDK_VERSION_STRING VERSION_LESS "2.0.0")
     message(FATAL_ERROR "Raspberry Pi Pico SDK version 2.0.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}.")
 endif()
 
-add_subdirectory(lib/i2s)  # Use local i2s instead
 
 
-
-add_executable(${PROJECT_NAME}
-    src/main.c
-)
-
-target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
-    lib/
-)
-
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-    AUDIO_FREQ_MAX=48000
-    PICO_USBDEV_MAX_DESCRIPTOR_SIZE=256
-    PICO_USBDEV_USE_ZERO_BASED_INTERFACES=1
-    PICO_USBDEV_ISOCHRONOUS_BUFFER_STRIDE_TYPE=1
-)
-
-target_link_libraries(${PROJECT_NAME}
-    pico_stdlib
-    usb_device
-    pico_audio_i2s
-    pico_multicore
-)
-
-
-
-# Creates map/bin/hex/uf2 files, in addition to elf
-pico_add_extra_outputs(${PROJECT_NAME})
+add_subdirectory(uac1)
