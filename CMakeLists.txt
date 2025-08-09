@@ -40,3 +40,4 @@ endif()
 
 
 add_subdirectory(uac1)
+add_subdirectory(uac2)
