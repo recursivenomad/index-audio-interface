@@ -5,7 +5,6 @@
 PROJECT(usb_sound_card C CXX ASM)
 
 
-set(SKIP_PICO_AUDIO_I2S TRUE)  # Skips pico_audio_i2s within pico-extras
 add_subdirectory(lib/i2s)      # Use local i2s instead
 
 

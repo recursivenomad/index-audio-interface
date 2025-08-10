@@ -30,6 +30,8 @@ include($ENV{PICO_EXTRAS_PATH}/external/pico_extras_import.cmake)
 PROJECT(index-audio-interface C CXX ASM)
 
 
+set(SKIP_PICO_AUDIO_I2S TRUE)  # Skips pico_audio_i2s within pico-extras
+
 # Invokes the Pico SDK's CMakeLists.txt
 pico_sdk_init()
 
