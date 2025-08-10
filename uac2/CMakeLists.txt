@@ -22,6 +22,8 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 )
 
 target_link_libraries(${PROJECT_NAME}
+    pico_stdlib
+    hardware_dma
     tinyusb_device
     tinyusb_board
     pico-i2s-pio
