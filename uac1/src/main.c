@@ -356,12 +356,18 @@ uint16_t db_to_vol[91] = {
 
 // actually windows doesn't seem to like this in the middle, so set top range to 0db
 #define DYNAMIC_RANGE_DB 91
+#define DEFAULT_VOLUME_DBFS 0
 
-#define ENCODE_DB(x) ((uint16_t)(int16_t)((x)*256))
+#define USB_DB_STEPS 256  // Number of steps between USB integer dB values, defined by the USB Audio Class 1.0 definition (pg. 76)
 
-#define VOLUME_MIN           ENCODE_DB(-DYNAMIC_RANGE_DB)
-#define VOLUME_DEF           ENCODE_DB(0)
+#define ENCODE_DB(x) ((uint16_t)(int16_t)((x)*USB_DB_STEPS))
+
 #define VOLUME_MAX           ENCODE_DB(count_of(db_to_vol)-DYNAMIC_RANGE_DB)
+
+#define ENCODE_DBFS(x)      (ENCODE_DB(x) + VOLUME_MAX)
+
+#define VOLUME_MIN           ENCODE_DBFS(-DYNAMIC_RANGE_DB)
+#define VOLUME_DEF           ENCODE_DBFS(DEFAULT_VOLUME_DBFS)
 #define VOLUME_RES           ENCODE_DB(1)
 
 static bool do_get_minimum(struct usb_setup_packet *setup) {
@@ -426,14 +432,14 @@ static void _audio_reconfigure() {
 
 static void audio_set_volume(int16_t volume) {
     #ifndef NDEBUG
-        printf("wVolume: 0x%04X (%f dB)\n", (uint16_t)volume, (float)volume / (float)256);
+        printf("wVolume: 0x%04X (%f dB)\n", (uint16_t)volume, (float)volume / (float)USB_DB_STEPS);
     #endif
 
     audio_state.volume = volume;
     // todo interpolate
-    volume += DYNAMIC_RANGE_DB * 256;
+    volume += DYNAMIC_RANGE_DB * USB_DB_STEPS;
     if (volume < 0) volume = 0;
-    if (volume >= count_of(db_to_vol) * 256) volume = count_of(db_to_vol) * 256 - 1;
+    if (volume >= count_of(db_to_vol) * USB_DB_STEPS) volume = count_of(db_to_vol) * USB_DB_STEPS - 1;
     audio_state.vol_mul = db_to_vol[((uint16_t)volume) >> 8u];
 
     #ifndef NDEBUG
