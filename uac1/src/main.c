@@ -425,13 +425,20 @@ static void _audio_reconfigure() {
 }
 
 static void audio_set_volume(int16_t volume) {
+    #ifndef NDEBUG
+        printf("wVolume: 0x%04X (%f dB)\n", (uint16_t)volume, (float)volume / (float)256);
+    #endif
+
     audio_state.volume = volume;
     // todo interpolate
     volume += CENTER_VOLUME_INDEX * 256;
     if (volume < 0) volume = 0;
     if (volume >= count_of(db_to_vol) * 256) volume = count_of(db_to_vol) * 256 - 1;
     audio_state.vol_mul = db_to_vol[((uint16_t)volume) >> 8u];
-//    printf("VOL MUL %04x\n", audio_state.vol_mul);
+
+    #ifndef NDEBUG
+        printf("Set vol: 0x%04X (%.2f%%)\n\n", (uint16_t)audio_state.vol_mul, (float)audio_state.vol_mul / (float)INT16_MAX * 100.0F);
+    #endif
 }
 
 static void audio_cmd_packet(struct usb_endpoint *ep) {
