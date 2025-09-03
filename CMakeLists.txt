@@ -22,6 +22,11 @@ set(PICO_STDIO_SEMIHOSTING OFF)
 
 
 
+#set(PICO_BOARD pico2)
+#set(PICO_PLATFORM rp2350-riscv)
+
+
+
 # Include the Pico SDK & Extras (build functions, compiling definitions, etc)
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 include($ENV{PICO_EXTRAS_PATH}/external/pico_extras_import.cmake)
