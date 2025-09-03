@@ -355,21 +355,21 @@ uint16_t db_to_vol[91] = {
 };
 
 // actually windows doesn't seem to like this in the middle, so set top range to 0db
-#define CENTER_VOLUME_INDEX 91
+#define DYNAMIC_RANGE_DB 91
 
 #define ENCODE_DB(x) ((uint16_t)(int16_t)((x)*256))
 
-#define MIN_VOLUME           ENCODE_DB(-CENTER_VOLUME_INDEX)
-#define DEFAULT_VOLUME       ENCODE_DB(0)
-#define MAX_VOLUME           ENCODE_DB(count_of(db_to_vol)-CENTER_VOLUME_INDEX)
-#define VOLUME_RESOLUTION    ENCODE_DB(1)
+#define VOLUME_MIN           ENCODE_DB(-DYNAMIC_RANGE_DB)
+#define VOLUME_DEF           ENCODE_DB(0)
+#define VOLUME_MAX           ENCODE_DB(count_of(db_to_vol)-DYNAMIC_RANGE_DB)
+#define VOLUME_RES           ENCODE_DB(1)
 
 static bool do_get_minimum(struct usb_setup_packet *setup) {
     usb_debug("AUDIO_REQ_GET_MIN\n");
     if ((setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
         switch (setup->wValue >> 8u) {
             case FEATURE_VOLUME_CONTROL: {
-                usb_start_tiny_control_in_transfer(MIN_VOLUME, 2);
+                usb_start_tiny_control_in_transfer(VOLUME_MIN, 2);
                 return true;
             }
         }
@@ -382,7 +382,7 @@ static bool do_get_maximum(struct usb_setup_packet *setup) {
     if ((setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
         switch (setup->wValue >> 8u) {
             case FEATURE_VOLUME_CONTROL: {
-                usb_start_tiny_control_in_transfer(MAX_VOLUME, 2);
+                usb_start_tiny_control_in_transfer(VOLUME_MAX, 2);
                 return true;
             }
         }
@@ -395,7 +395,7 @@ static bool do_get_resolution(struct usb_setup_packet *setup) {
     if ((setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
         switch (setup->wValue >> 8u) {
             case FEATURE_VOLUME_CONTROL: {
-                usb_start_tiny_control_in_transfer(VOLUME_RESOLUTION, 2);
+                usb_start_tiny_control_in_transfer(VOLUME_RES, 2);
                 return true;
             }
         }
@@ -431,7 +431,7 @@ static void audio_set_volume(int16_t volume) {
 
     audio_state.volume = volume;
     // todo interpolate
-    volume += CENTER_VOLUME_INDEX * 256;
+    volume += DYNAMIC_RANGE_DB * 256;
     if (volume < 0) volume = 0;
     if (volume >= count_of(db_to_vol) * 256) volume = count_of(db_to_vol) * 256 - 1;
     audio_state.vol_mul = db_to_vol[((uint16_t)volume) >> 8u];
@@ -582,7 +582,7 @@ void usb_sound_card_init() {
                                                          boot_device_interfaces, count_of(boot_device_interfaces),
                                                          _get_descriptor_string);
     assert(device);
-    audio_set_volume(DEFAULT_VOLUME);
+    audio_set_volume(VOLUME_DEF);
     _audio_reconfigure();
 //    device->on_configure = _on_configure;
     usb_device_start();
@@ -640,7 +640,7 @@ int main(void) {
     usb_sound_card_init();
 
     multicore_launch_core1(core1_worker);
-    printf("HAHA %04x %04x %04x %04x\n", MIN_VOLUME, DEFAULT_VOLUME, MAX_VOLUME, VOLUME_RESOLUTION);
+    printf("HAHA %04x %04x %04x %04x\n", VOLUME_MIN, VOLUME_DEF, VOLUME_MAX, VOLUME_RES);
     // MSD is irq driven
     while (1) __wfi();
 }
