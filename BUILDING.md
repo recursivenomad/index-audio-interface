@@ -117,7 +117,7 @@ And this guide will utilize:
 
 - Git for Windows
 - A bash emulator (Git Bash, included in Git for Windows)
-- A serial monitor (Serial Studio as an example)
+- A serial monitor (Serialibre as an example)
 - Zadig
 - 7Zip
 
@@ -405,9 +405,9 @@ If you see a blinking green light on your Pico, then everything appears to have 
 
 **2.1. Install a serial monitor.**
 
-There are plenty of options out there, but I will be using [Serial Studio](https://serial-studio.github.io/) *(3.0.6)* if you'd like to follow along.
+There are plenty of options out there, but I will be using [Serialibre](https://github.com/recursivenomad-forks/Serialibre/releases/tag/v3.0.8) *(3.0.8)* if you'd like to follow along.  Serialibre is a fork I made of [Serial Studio](https://serial-studio.github.io/), before its licensing had changed.
 
-Initial settings I recommend for Serial Studio:
+These settings should already be set by default in Serialibre:
 
 - Disable "Create CSV File"
 - Frame Parsing: No Parsing
@@ -435,7 +435,7 @@ In a terminal enter:
 Hold down the BOOTSEL button and plug in the Pico.  
 Copy the file `...\pico-examples\build\hello_world\usb\hello_usb.uf2` over to the Pico.  
 
-Once the Pico restarts, check the drop-down again in Serial Studio to see what the new COM port index is, and select it.  
+Once the Pico restarts, check the drop-down again in Serialibre to see what the new COM port index is, and select it.  
 Select a baud rate of 115200.  
 You should see the Pico repeatedly printing "`Hello world!`"
 
@@ -467,7 +467,53 @@ Place the extracted files in `C:\tools\openocd\`.
 
 
 
-**2.4. Add `C:\tools\openocd\bin` to your system path** - *See step 1.10 if you need instructions for editing the system path.*
+**2.4. Patch openocd to correctly end a GDB session**
+
+Navigate to `C:\tools\openocd\`, and create the folder `debugger`.  Inside `debugger\`, create a file called `gdb.cfg`.
+
+Input the following into `gdb.cfg`:
+
+  ```
+  if { [info exists _TARGETNAME] } {
+      $_TARGETNAME configure -event gdb-detach {
+          resume
+      }
+  }
+
+  if { [info exists _TARGETNAME0] } {
+      $_TARGETNAME0 configure -event gdb-detach {
+          resume
+      }
+  }
+
+  if { [info exists _TARGETNAME1] } {
+      $_TARGETNAME1 configure -event gdb-detach {
+          resume
+      }
+  }
+
+  if { [info exists _TARGETNAME_0] } {
+      $_TARGETNAME_0 configure -event gdb-detach {
+          resume
+      }
+  }
+
+  if { [info exists _TARGETNAME_1] } {
+      $_TARGETNAME_1 configure -event gdb-detach {
+          resume
+      }
+  }
+  ```
+
+*Fix shared here: <https://github.com/Marus/cortex-debug/issues/894#issuecomment-1783846249>*
+
+*Issue being tracked with OpenOCD here: <https://sourceforge.net/p/openocd/tickets/399/>*
+
+&nbsp;
+
+
+
+**2.5. Add `C:\tools\openocd\bin` to your system path** - *See step 1.10 if you need instructions for editing the system path.*
 
 To confirm OpenOCD installed correctly, in a terminal enter:
 
@@ -479,7 +525,7 @@ To confirm OpenOCD installed correctly, in a terminal enter:
 
 
 
-**2.5. Download [Zadig](https://github.com/pbatard/libwdi/releases/tag/v1.5.1)**.
+**2.6. Download [Zadig](https://github.com/pbatard/libwdi/releases/tag/v1.5.1)**.
 
 This will be used to install drivers for the Pico's reset interface.
 
@@ -491,7 +537,7 @@ This will be used to install drivers for the Pico's reset interface.
 
 
 
-**2.6. Install drivers for the Pico:**  
+**2.7. Install drivers for the Pico:**  
   - With the Raspberry Pi Pico unplugged, hold down the BOOTSEL button and plug in the Pico.  
   - Launch Zadig.  
   - Ensure "`RP2 Boot (Interface 1)`" is selected as the device  
@@ -540,7 +586,7 @@ I am pretty certain you should only have to do this once, and it will work for a
 
 
 
-**2.7. Build and upload debugprobe** - In a terminal enter:
+**2.8. Build and upload debugprobe** - In a terminal enter:
 
   ```
   cd C:/tools/sdk/pico/debugprobe/
@@ -561,7 +607,7 @@ The LED on the debugprobe should now be on.
 
 
 
-**2.8. Upload firmware to the target Pico via OpenOCD:**
+**2.9. Upload firmware to the target Pico via OpenOCD:**
 
 Wire your 2 Picos together as show in [Raspberry Pi's getting started guide](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf#debugprobe-wiring-section).
 
@@ -569,7 +615,7 @@ In a terminal enter:
 
   ```
   cd C:/tools/sdk/pico/pico-examples/build/blink/
-  openocd -s C:/tools/openocd/scripts -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "program blink.elf verify reset exit"
+  openocd -s C:/tools/openocd/scripts -f interface/cmsis-dap.cfg -f target/rp2040.cfg -f debugger/gdb.cfg -c "program blink.elf verify reset exit"
   ```
 
 *(The switch `-s C:/tools/openocd/scripts` should not be necessary when using an official release build of OpenOCD)*
@@ -580,12 +626,12 @@ After a slow upload process, the target Pico should now be blinking.
 
 
 
-**2.9. Launch the OpenOCD server:**
+**2.10. Launch the OpenOCD server:**
 
 In a terminal enter:
 
   ```
-  openocd -s C:/tools/openocd/scripts -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000"
+  openocd -s C:/tools/openocd/scripts -f interface/cmsis-dap.cfg -f target/rp2040.cfg -f debugger/gdb.cfg -c "adapter speed 5000"
   ```
 
 **Leave this terminal open!**
@@ -594,7 +640,7 @@ In a terminal enter:
 
 
 
-**2.10. Launch GDB:**
+**2.11. Launch GDB:**
 
 In a *separate* terminal enter:
 
@@ -1009,7 +1055,8 @@ This guide will set up the global settings instead.
                   "searchDir": [ "C:/tools/openocd/scripts" ],  // Not necessary once using an official build of OpenOCD
                   "configFiles": [
                       "interface/cmsis-dap.cfg",
-                      "target/rp2040.cfg"
+                      "target/rp2040.cfg",
+                      "debugger/gdb.cfg",
                   ],
 
                   "openOCDLaunchCommands": [
@@ -1055,7 +1102,8 @@ This guide will set up the global settings instead.
                   "searchDir": [ "C:/tools/openocd/scripts" ],
                   "configFiles": [
                       "interface/cmsis-dap.cfg",
-                      "target/rp2350.cfg"
+                      "target/rp2350.cfg",
+                      "debugger/gdb.cfg",
                   ],
 
                   "openOCDLaunchCommands": [
@@ -1099,7 +1147,8 @@ This guide will set up the global settings instead.
                   "searchDir": [ "C:/tools/openocd/scripts" ],
                   "configFiles": [
                       "interface/cmsis-dap.cfg",
-                      "target/rp2350-riscv.cfg"
+                      "target/rp2350-riscv.cfg",
+                      "debugger/gdb.cfg",
                   ],
 
                   "openOCDLaunchCommands": [
