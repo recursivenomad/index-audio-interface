@@ -10,9 +10,6 @@ set(CMAKE_CXX_STANDARD 17)
 add_compile_options(-ffile-prefix-map=${CMAKE_SOURCE_DIR}=.)
 
 
-# Option to output extra compiler warnings for files within our control
-set(EXTRA_NON_IMPORTED_COMPILER_WARNINGS ON)
-
 # SDK option to not optimize anything during debug builds
 set(PICO_DEOPTIMIZED_DEBUG ON)
 # SDK option to disable firmware access restrictions
@@ -48,6 +45,20 @@ pico_sdk_init()
 if (PICO_SDK_VERSION_STRING VERSION_LESS "2.0.0")
     message(FATAL_ERROR "Raspberry Pi Pico SDK version 2.0.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}.")
 endif()
+
+# Forcibly redefine the Pico SDK as INTERFACE_SYSTEM to suppress header warnings
+set_target_properties(pico_base PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:pico_base,INTERFACE_INCLUDE_DIRECTORIES>)
+set_target_properties(usb_device PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:usb_device,INTERFACE_INCLUDE_DIRECTORIES>)
+set_target_properties(tinyusb_common_base PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:tinyusb_common_base,INTERFACE_INCLUDE_DIRECTORIES>)
+
+# Generate a list of all program files we want to receive extra warnings for
+set(EXTRA_COMPILER_WARNINGS "-Wall -Wextra -Wpedantic")
+file(GLOB_RECURSE EXTRA_WARN_DIRECTORIES CONFIGURE_DEPENDS
+    *.h
+    *.hpp
+    *.c
+    *.cpp
+)
 
 
 

@@ -32,19 +32,10 @@ target_link_libraries(${PROJECT_NAME}
 
 
 
-if(${EXTRA_NON_IMPORTED_COMPILER_WARNINGS})
-
-    # Assert additional compiler warnings for files beneath this directory
-
-    file(GLOB_RECURSE WARN_DIRECTORIES CONFIGURE_DEPENDS
-        *
-    )
-
-    set_source_files_properties(${WARN_DIRECTORIES} PROPERTIES
-        COMPILE_FLAGS "-Wall -Wextra -Wpedantic"
-    )
-
-endif()
+# Assert additional compiler warnings for files within our control
+set_source_files_properties(${EXTRA_WARN_DIRECTORIES} PROPERTIES
+    COMPILE_FLAGS ${EXTRA_COMPILER_WARNINGS}
+)
 
 
 
