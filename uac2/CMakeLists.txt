@@ -16,6 +16,7 @@ add_executable(${PROJECT_NAME}
 
 target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
     lib/tinyusb
+    ../shared/lib
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
