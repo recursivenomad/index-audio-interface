@@ -36,6 +36,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "recursivenomad/debug.h"
+
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
@@ -416,6 +418,7 @@ bool tud_audio_tx_done_pre_load_cb(uint8_t rhport, uint8_t itf, uint8_t ep_in, u
 
 void tud_audio_fb_done_cb(uint8_t rhport)
 {
+  UNUSED(rhport);
   return;
 }
 

@@ -488,6 +488,7 @@ static const struct usb_transfer_type _audio_cmd_transfer_type = {
 
 static bool as_set_alternate(struct usb_interface *interface, uint alt) {
     assert(interface == &as_op_interface);
+    UNUSED(interface);
     usb_warn("SET ALTERNATE %d\n", alt);
     return alt < 2;
 }
