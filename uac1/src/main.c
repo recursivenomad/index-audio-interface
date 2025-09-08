@@ -40,7 +40,7 @@ static char *descriptor_strings[] =
 #define AUDIO_IN_ENDPOINT   0x82U
 
 #undef AUDIO_SAMPLE_FREQ
-#define AUDIO_SAMPLE_FREQ(frq) (uint8_t)(frq), (uint8_t)((frq >> 8)), (uint8_t)((frq >> 16))
+#define AUDIO_SAMPLE_FREQ(frq) { (uint8_t)(frq), (uint8_t)((frq >> 8)), (uint8_t)((frq >> 16)) }
 
 #define AUDIO_MAX_PACKET_SIZE(freq) (uint8_t)(((freq + 999) / 1000) * 4)
 #define FEATURE_MUTE_CONTROL 1u
@@ -272,7 +272,7 @@ static void _as_audio_packet(struct usb_endpoint *ep) {
     uint16_t vol_mul = audio_state.vol_mul;
     int16_t *out = (int16_t *) audio_buffer->buffer->bytes;
     int16_t *in = (int16_t *) usb_buffer->data;
-    for (int i = 0; i < audio_buffer->sample_count * 2; i++) {
+    for (int i = 0; (uint)i < audio_buffer->sample_count * 2; i++) {
         out[i] = (int16_t) ((in[i] * vol_mul) >> 15u);
     }
 
@@ -421,7 +421,7 @@ static struct audio_control_cmd {
     uint8_t len;
 } audio_control_cmd_t;
 
-static void _audio_reconfigure() {
+static void _audio_reconfigure(void) {
     switch (audio_state.freq) {
         case 44100:
         case 48000:
@@ -434,13 +434,13 @@ static void _audio_reconfigure() {
 }
 
 static void audio_set_volume(int16_t volume) {
-    DEBUG_LOG("wVolume: 0x%04X (%    .03f dB)", (uint16_t)volume, (float)volume / (float)USB_DB_STEPS);
+    DEBUG_LOG("wVolume: 0x%04X (%.000003f dB)", (uint16_t)volume, (float)volume / (float)USB_DB_STEPS);
 
     audio_state.volume = volume;
     // todo interpolate
     volume += DYNAMIC_RANGE_DB * USB_DB_STEPS;
     if (volume < 0) volume = 0;
-    if (volume >= count_of(db_to_vol) * USB_DB_STEPS) volume = count_of(db_to_vol) * USB_DB_STEPS - 1;
+    if ((uint)volume >= count_of(db_to_vol) * USB_DB_STEPS) volume = count_of(db_to_vol) * USB_DB_STEPS - 1;
     audio_state.vol_mul = db_to_vol[((uint16_t)volume) >> 8u];
 
     DEBUG_LOG("Set vol: 0x%04X (%.2f%%)", (uint16_t)audio_state.vol_mul, (float)audio_state.vol_mul / (float)INT16_MAX * 100.0F);
@@ -560,7 +560,7 @@ bool _as_setup_request_handler(__unused struct usb_endpoint *ep, struct usb_setu
     return false;
 }
 
-void usb_sound_card_init() {
+void usb_sound_card_init(void) {
     //msd_interface.setup_request_handler = msd_setup_request_handler;
     usb_interface_init(&ac_interface, &audio_device_config.ac_interface, NULL, 0, true);
     ac_interface.setup_request_handler = ac_setup_request_handler;
@@ -591,7 +591,7 @@ void usb_sound_card_init() {
     usb_device_start();
 }
 
-static void core1_worker() {
+static void core1_worker(void) {
     audio_i2s_set_enabled(true);
 }
 

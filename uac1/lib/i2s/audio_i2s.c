@@ -43,7 +43,7 @@ audio_buffer_format_t pio_i2s_consumer_buffer_format = {
         .format = &pio_i2s_consumer_format,
 };
 
-static void __isr __time_critical_func(audio_i2s_dma_irq_handler)();
+static void __isr __time_critical_func(audio_i2s_dma_irq_handler)(void);
 
 const audio_format_t *audio_i2s_setup(const audio_format_t *intended_audio_format,
                                                const audio_i2s_config_t *config) {
@@ -132,7 +132,7 @@ static void wrap_producer_give(audio_connection_t *connection, audio_buffer_t *b
 #if PICO_AUDIO_I2S_MONO_OUTPUT
     unsupported;
 #else
-    return stereo_to_stereo_producer_give(connection, buffer);
+    stereo_to_stereo_producer_give(connection, buffer);
 #endif
 #endif
 }
@@ -296,7 +296,7 @@ bool audio_i2s_connect_s8(audio_buffer_pool_t *producer) {
     return true;
 }
 
-static inline void audio_start_dma_transfer() {
+static inline void audio_start_dma_transfer(void) {
     assert(!shared_state.playing_buffer);
     audio_buffer_t *ab = take_audio_buffer(audio_i2s_consumer, false);
 
@@ -331,7 +331,7 @@ static inline void audio_start_dma_transfer() {
 }
 
 // irq handler for DMA
-void __isr __time_critical_func(audio_i2s_dma_irq_handler)() {
+void __isr __time_critical_func(audio_i2s_dma_irq_handler)(void) {
 #if PICO_AUDIO_I2S_NOOP
     assert(false);
 #else
