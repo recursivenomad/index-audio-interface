@@ -31,6 +31,22 @@ target_link_libraries(${PROJECT_NAME}
 
 
 
+if(${EXTRA_NON_IMPORTED_COMPILER_WARNINGS})
+
+    # Assert additional compiler warnings for files beneath this directory
+
+    file(GLOB_RECURSE WARN_DIRECTORIES CONFIGURE_DEPENDS
+        *
+    )
+
+    set_source_files_properties(${WARN_DIRECTORIES} PROPERTIES
+        COMPILE_FLAGS "-Wall -Wextra -Wpedantic"
+    )
+
+endif()
+
+
+
 pico_set_program_name(${PROJECT_NAME}        "pico_usb_i2s_speaker")
 pico_set_program_version(${PROJECT_NAME}     "0.1")
 

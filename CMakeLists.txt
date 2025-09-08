@@ -10,6 +10,9 @@ set(CMAKE_CXX_STANDARD 17)
 add_compile_options(-ffile-prefix-map=${CMAKE_SOURCE_DIR}=.)
 
 
+# Option to output extra compiler warnings for files within our control
+set(EXTRA_NON_IMPORTED_COMPILER_WARNINGS ON)
+
 # SDK option to not optimize anything during debug builds
 set(PICO_DEOPTIMIZED_DEBUG ON)
 # SDK option to disable firmware access restrictions
