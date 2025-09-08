@@ -23,6 +23,8 @@
 
 #ifndef NDEBUG
 
+    #include <stdio.h>
+
     #ifndef DEBUG_OUTPUT_CHAR_LEN
         #define  DEBUG_OUTPUT_CHAR_LEN  80  // Assume classic terminal width
     #endif
