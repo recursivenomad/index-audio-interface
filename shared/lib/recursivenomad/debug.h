@@ -7,10 +7,17 @@
 
 
 
-// Use hacky sizeof on multiple arguments to ensure a single integer output
-// Final argument is the one evaluated, so append 0 to reduce compiler warnings
-// Cast to a null pointer to guarantee false conditional evaluation
-#define UNUSED(...)  ((void*)sizeof(__VA_ARGS__, 0))
+// Bool array will accept string literals
+// Pad start of array with 0 so compiler thinks it's from an int array
+// Cast to void to discard variables while keeping compiler happy
+// Invoke _Pragma() operators to suppress GCC's cast-to-bool warning
+#define UNUSED(...)                                                      \
+        {                                                                \
+            _Pragma("GCC diagnostic push")                               \
+            _Pragma("GCC diagnostic ignored \"-Wint-in-bool-context\"")  \
+                ((void)((_Bool[]){ 0, __VA_ARGS__ }));                   \
+            _Pragma("GCC diagnostic pop")                                \
+        }
 
 
 
