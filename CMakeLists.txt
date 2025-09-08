@@ -7,6 +7,8 @@ cmake_minimum_required(VERSION 3.13...4.0.1)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+add_compile_options(-ffile-prefix-map=${CMAKE_SOURCE_DIR}=.)
+
 
 # SDK option to not optimize anything during debug builds
 set(PICO_DEOPTIMIZED_DEBUG ON)

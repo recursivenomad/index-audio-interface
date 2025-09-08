@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 
+#include "recursivenomad/debug.h"
+
 #include "pico/stdlib.h"
 #include "pico/usb_device.h"
 #include "pico/audio.h"
@@ -314,7 +316,7 @@ static struct usb_transfer as_transfer;
 static struct usb_transfer as_sync_transfer;
 
 static bool do_get_current(struct usb_setup_packet *setup) {
-    usb_debug("AUDIO_REQ_GET_CUR\n");
+    DEBUG_LOG("AUDIO_REQ_GET_CUR");
 
     if ((setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
         switch (setup->wValue >> 8u) {
@@ -372,7 +374,7 @@ uint16_t db_to_vol[91] = {
 #define  VOLUME_DEF  ENCODE_DBFS(DEFAULT_VOLUME_DBFS)
 
 static bool do_get_minimum(struct usb_setup_packet *setup) {
-    usb_debug("AUDIO_REQ_GET_MIN\n");
+    DEBUG_LOG("AUDIO_REQ_GET_MIN");
     if ((setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
         switch (setup->wValue >> 8u) {
             case FEATURE_VOLUME_CONTROL: {
@@ -385,7 +387,7 @@ static bool do_get_minimum(struct usb_setup_packet *setup) {
 }
 
 static bool do_get_maximum(struct usb_setup_packet *setup) {
-    usb_debug("AUDIO_REQ_GET_MAX\n");
+    DEBUG_LOG("AUDIO_REQ_GET_MAX");
     if ((setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
         switch (setup->wValue >> 8u) {
             case FEATURE_VOLUME_CONTROL: {
@@ -398,7 +400,7 @@ static bool do_get_maximum(struct usb_setup_packet *setup) {
 }
 
 static bool do_get_resolution(struct usb_setup_packet *setup) {
-    usb_debug("AUDIO_REQ_GET_RES\n");
+    DEBUG_LOG("AUDIO_REQ_GET_RES");
     if ((setup->bmRequestType & USB_REQ_TYPE_RECIPIENT_MASK) == USB_REQ_TYPE_RECIPIENT_INTERFACE) {
         switch (setup->wValue >> 8u) {
             case FEATURE_VOLUME_CONTROL: {
@@ -432,9 +434,7 @@ static void _audio_reconfigure() {
 }
 
 static void audio_set_volume(int16_t volume) {
-    #ifndef NDEBUG
-        printf("wVolume: 0x%04X (%f dB)\n", (uint16_t)volume, (float)volume / (float)USB_DB_STEPS);
-    #endif
+    DEBUG_LOG("wVolume: 0x%04X (%    .03f dB)", (uint16_t)volume, (float)volume / (float)USB_DB_STEPS);
 
     audio_state.volume = volume;
     // todo interpolate
@@ -443,9 +443,7 @@ static void audio_set_volume(int16_t volume) {
     if (volume >= count_of(db_to_vol) * USB_DB_STEPS) volume = count_of(db_to_vol) * USB_DB_STEPS - 1;
     audio_state.vol_mul = db_to_vol[((uint16_t)volume) >> 8u];
 
-    #ifndef NDEBUG
-        printf("Set vol: 0x%04X (%.2f%%)\n\n", (uint16_t)audio_state.vol_mul, (float)audio_state.vol_mul / (float)INT16_MAX * 100.0F);
-    #endif
+    DEBUG_LOG("Set vol: 0x%04X (%.2f%%)", (uint16_t)audio_state.vol_mul, (float)audio_state.vol_mul / (float)INT16_MAX * 100.0F);
 }
 
 static void audio_cmd_packet(struct usb_endpoint *ep) {
@@ -495,9 +493,7 @@ static bool as_set_alternate(struct usb_interface *interface, uint alt) {
 }
 
 static bool do_set_current(struct usb_setup_packet *setup) {
-#ifndef NDEBUG
-    usb_warn("AUDIO_REQ_SET_CUR\n");
-#endif
+    DEBUG_LOG("AUDIO_REQ_SET_CUR");
 
     if (setup->wLength && setup->wLength < 64) {
         audio_control_cmd_t.cmd = AUDIO_REQ_SetCurrent;
