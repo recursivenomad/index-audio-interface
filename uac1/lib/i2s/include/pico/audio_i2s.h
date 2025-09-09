@@ -7,6 +7,9 @@
 #ifndef _PICO_AUDIO_I2S_H
 #define _PICO_AUDIO_I2S_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "pico/audio.h"
 
 /** \file audio_i2s.h

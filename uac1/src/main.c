@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
+#include <assert.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <sys/cdefs.h>
 
 #include "recursivenomad/debug.h"
 
@@ -15,6 +20,7 @@
 #include "pico/multicore.h"
 #include "hardware/clocks.h"
 #include "lufa/AudioClassCommon.h"
+#include "lufa/StdDescriptors.h"
 
 // todo forget why this is using core 1 for sound: presumably not necessary
 // todo noop when muted

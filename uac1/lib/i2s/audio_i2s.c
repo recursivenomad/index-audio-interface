@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
+#include <assert.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <sys/cdefs.h>
 
 #include "pico/audio_i2s.h"
 #include "audio_i2s.pio.h"

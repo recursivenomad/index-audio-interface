@@ -33,16 +33,19 @@
  * 
  */
 
-#include <stdio.h>
-#include <string.h>
+#ifndef NDEBUG
+  #include <inttypes.h>
+#endif
+
+#include <stdint.h>
+#include <stdbool.h>
 
 #include "recursivenomad/debug.h"
 
-#include "pico/stdlib.h"
-#include "hardware/clocks.h"
+#include "hardware/pio.h"
 #include "hardware/dma.h"
-
 #include "bsp/board_api.h"
+#include "tusb_config.h"
 #include "tusb.h"
 #include "usb_descriptors.h"
 

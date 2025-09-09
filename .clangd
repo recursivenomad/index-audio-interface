@@ -1,2 +1,22 @@
 Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
+  Includes:
+    IgnoreHeader: [
+      .*/pico-sdk/.*,
+      .*/pico-extras/.*,
+      .*/tinyusb/.*,
+    ]
+
+---
+
+# Library files; don't diagnose
+
+If:
+  PathMatch: [
+    ".*/lib/lufa/.*",
+    ".*/lib/pico-i2s-pio/.*",
+  ]
+Diagnostics:
   UnusedIncludes: None
+  MissingIncludes: None

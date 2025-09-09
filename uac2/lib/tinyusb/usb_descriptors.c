@@ -33,8 +33,14 @@
  * @date 2025-04-06
  * 
  */
+ 
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "bsp/board_api.h"
+#include "tusb_config.h"
 #include "tusb.h"
 #include "usb_descriptors.h"
 

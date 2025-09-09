@@ -23,7 +23,7 @@
 
 #ifndef NDEBUG
 
-    #include <stdio.h>
+    #include <stdio.h>  // IWYU pragma: keep
 
     #ifndef DEBUG_OUTPUT_CHAR_LEN
         #define  DEBUG_OUTPUT_CHAR_LEN  80  // Assume classic terminal width
